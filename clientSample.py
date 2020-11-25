@@ -1,20 +1,16 @@
-import sys
-from socket import socket, AF_INET, SOCK_DGRAM, SOCK_STREAM
+import socket
 
-SERVER_IP = '192.168.0.27'
-PORT_NUMBER = 5000
-SIZE = 1024
-print ("Test client sending packets to IP {0}, via port {1}\n".format(SERVER_IP, PORT_NUMBER))
+# Create a socket object
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-mySocket = socket( AF_INET, SOCK_DGRAM )
-# myMessage = 1#"Hello!"
-# myMessage1 = ""
-i = 0
-while i < 10:
-    print(i)
-    mySocket.sendto(i.to_bytes(2, 'big'),(SERVER_IP,PORT_NUMBER)) #myMessage.encode('utf-8')
-    # data, addr = mySocket.recvfrom(1024)
-    # print(data)
-    i = i + 1
+# Define the port on which you want to connect
+port = 5000
 
-mySocket.close()
+# connect to the server on local computer
+s.sendto(b'1', ('192.168.0.15', port))
+data, addr = s.recvfrom(1024)
+print(data)
+# receive data from the server
+# print(s.recv(1024))
+# close the connection
+s.close()

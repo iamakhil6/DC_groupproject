@@ -15,19 +15,21 @@ import time
 
 class Worker():
     def __init__(self):
+        ### Metrics ###
+        self.t1 = datetime.datetime.now()
+        self.msg_count = 0
+        #################
+        self.exit_flag = False
         self.id = 'w3'
-        self.system_ip = "131.151.89.14"
+        self.system_ip = "131.151.243.66"
         self.process_port = 9000
         self.msg_port = 9001
         self.result_port = 9002
         self.workers_id = ['w1', 'w2']
-        self.servers_list = {"w1": ["131.151.89.158", 7000, 7001, 7002],
-                             "w2": ["131.151.90.156", 8000, 8001, 8002]}
+        self.servers_list = {"w1": ["131.151.243.64", 7000, 7001, 7002],
+                             "w2": ["131.151.243.65", 8000, 8001, 8002]}
         self.threshold = 5
-        self.numbers = [1000000, 1100000, 1200000, 1300000, 1400000,
-                        1000000, 1100000, 1200000, 1300000, 1400000,
-                        1000000, 1100000, 1200000, 1300000, 1400000,
-                        1000000, 1100000, 1200000, 1300000, 1400000]
+        self.numbers = []
         self.processes = queue.Queue()
         self.processes.queue = queue.deque(self.numbers)
         self.init_count = threading.active_count()
@@ -117,7 +119,6 @@ class Worker():
         idx = [i for i, v in enumerate(self.servers_list.values()) if str(addr) in v][0]
         wid = self.workers_id[idx]
         if data == 'SMYP':
-            print(data)
             if self.load >= self.threshold:
                 self.send_process(worker_id=wid, p=self.processes.get())
 
@@ -143,6 +144,7 @@ class Worker():
             except:
                 pass
         client.sendall(func_text)
+        self.msg_count += 1
         client.close()
 
     def send_msg(self, worker_id, msg):
@@ -157,6 +159,7 @@ class Worker():
             except:
                 pass
         client.sendall(bytes(msg, encoding="utf-8"))
+        self.msg_count += 1
         client.close()
 
     def send_result(self, worker_id, msg):
@@ -171,6 +174,7 @@ class Worker():
             except:
                 pass
         client.sendall(bytes(msg, encoding="utf-8"))
+        self.msg_count += 1
         client.close()
 
     def result_sender(self):
@@ -189,6 +193,12 @@ class Worker():
             print('Load:', self.load, '\n')
             print('Local Results:', list(results_w3.queue), '\n')
             print('Server Results:', list(server_res_w3.queue), '\n')
+            if len(list(results_w3.queue)) + len(list(server_res_w3.queue)) == len(self.numbers):
+                self.exit_flag = True
+                time_taken = datetime.datetime.now() - self.t1
+                print(time_taken)
+                print("Messages Sent: ", self.msg_count)
+                sys.exit()
             time.sleep(1)
 
     def request_process(self):
@@ -196,6 +206,7 @@ class Worker():
             if self.load < self.threshold:
                 worker = random.choice(self.workers_id)
                 self.send_msg(worker, 'SMYP')
+                time.sleep(1)
 
     def local(self):
         while True:
@@ -218,6 +229,11 @@ class Worker():
         def inner():
             self.server_results.put((wid, str(func())))
         return inner
+
+    def start(self):
+        while True:
+            if self.exit_flag is True:
+                sys.exit()
 
 
 results_w3 = queue.Queue()
@@ -267,3 +283,4 @@ if __name__ == "__main__":
     request_process.start()
     result_sender.start()
     status_tracker.start()
+    worker.start()

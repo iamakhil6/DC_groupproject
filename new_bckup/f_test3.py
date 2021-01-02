@@ -6,6 +6,7 @@ import queue
 import select
 import dill
 import json
+import csv
 import random
 import datetime
 import math
@@ -18,6 +19,8 @@ class Worker():
         ### Metrics ###
         self.t1 = datetime.datetime.now()
         self.msg_count = 0
+        self.csv_file = "metrics.csv"
+        self.n_processes = "10"
         #################
         self.exit_flag = False
         self.id = 'w3'
@@ -54,7 +57,7 @@ class Worker():
                     conn, addr = s.accept()
                     inputs.append(conn)
                 else:
-                    data = s.recv(2048)
+                    data = s.recv(4096)
                     if data:
                         self.process_handler(data, addr[0])
                     else:
@@ -110,8 +113,13 @@ class Worker():
     def process_handler(self, data, addr):
         idx = [i for i, v in enumerate(self.servers_list.values()) if str(addr) in v][0]
         wid = self.workers_id[idx]
+        time_stamp = str(data).split('split_here')[1].strip("'")
+        time_taken = datetime.datetime.now() - datetime.datetime.fromisoformat(time_stamp)
+        time_taken = time_taken.seconds + (time_taken.microseconds * (10**-6))
+        with open(self.csv_file, 'a', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow([self.n_processes, str(time_taken)])
         func = dill.loads(data)
-        # func_result = str(func())
         self.server_queue.put((wid, func))
         print('Received process from:', wid)
 
@@ -133,6 +141,7 @@ class Worker():
 
     def send_process(self, worker_id, p):
         func_text = dill.dumps(partial(sum_primes, p))
+        dumps_file = func_text + b'split_here' + str(datetime.datetime.now()).encode()
         client = socket(AF_INET, SOCK_STREAM)
         client.setblocking(0)
         connected = False
@@ -143,7 +152,7 @@ class Worker():
                 connected = True
             except:
                 pass
-        client.sendall(func_text)
+        client.sendall(dumps_file)
         self.msg_count += 1
         client.close()
 

@@ -20,7 +20,7 @@ class Worker():
         self.t1 = datetime.datetime.now()
         self.msg_count = 0
         self.csv_file = "metrics.csv"
-        self.n_processes = "10"
+        self.n_processes = "70"
         #################
         self.exit_flag = False
         self.id = 'w3'
@@ -32,12 +32,12 @@ class Worker():
         self.servers_list = {"w1": ["131.151.243.64", 7000, 7001, 7002],
                              "w2": ["131.151.243.65", 8000, 8001, 8002]}
         self.threshold = 5
-        self.numbers = []
+        self.misc_count = 8
+        self.load = 0
+        self.init_count = threading.active_count()
+        self.numbers = list(range(6000000, 8000000, 100000))
         self.processes = queue.Queue()
         self.processes.queue = queue.deque(self.numbers)
-        self.init_count = threading.active_count()
-        self.misc_count = 9
-        self.load = 0
         self.local_queue = queue.Queue(maxsize=5)
         self.server_queue = queue.Queue()
         self.server_results = queue.Queue()
@@ -113,15 +113,16 @@ class Worker():
     def process_handler(self, data, addr):
         idx = [i for i, v in enumerate(self.servers_list.values()) if str(addr) in v][0]
         wid = self.workers_id[idx]
+        # print('Received process from:', wid)
         time_stamp = str(data).split('split_here')[1].strip("'")
         time_taken = datetime.datetime.now() - datetime.datetime.fromisoformat(time_stamp)
         time_taken = time_taken.seconds + (time_taken.microseconds * (10**-6))
+        time_taken = format(time_taken, '.5f')
         with open(self.csv_file, 'a', newline='') as csv_file:
             csv_writer = csv.writer(csv_file)
             csv_writer.writerow([self.n_processes, str(time_taken)])
         func = dill.loads(data)
         self.server_queue.put((wid, func))
-        print('Received process from:', wid)
 
     def msg_handler(self, data, addr):
         idx = [i for i, v in enumerate(self.servers_list.values()) if str(addr) in v][0]
@@ -137,7 +138,7 @@ class Worker():
             print(data)
             data = data.split(' ')[1]
             server_res_w3.put(int(data))
-            print(f"Result from {wid}:", data)
+            # print(f"Result from {wid}:", data)
 
     def send_process(self, worker_id, p):
         func_text = dill.dumps(partial(sum_primes, p))
@@ -197,18 +198,13 @@ class Worker():
         while True:
             self.load = threading.active_count() - self.init_count - self.misc_count
 
-    def status_tracker(self):
-        while True:
-            print('Load:', self.load, '\n')
-            print('Local Results:', list(results_w3.queue), '\n')
-            print('Server Results:', list(server_res_w3.queue), '\n')
-            if len(list(results_w3.queue)) + len(list(server_res_w3.queue)) == len(self.numbers):
-                self.exit_flag = True
-                time_taken = datetime.datetime.now() - self.t1
-                print(time_taken)
-                print("Messages Sent: ", self.msg_count)
-                sys.exit()
-            time.sleep(1)
+    # def msg_count_tracker(self):
+    #     time.sleep(5)
+    #     while True:
+    #         if self.load == 0:
+    #             print("Messages Sent: ", self.msg_count)
+    #             self.misc_count -= 1
+    #             sys.exit()
 
     def request_process(self):
         while True:
@@ -240,9 +236,17 @@ class Worker():
         return inner
 
     def start(self):
+        time.sleep(2)
         while True:
-            if self.exit_flag is True:
+            print('Load:', self.load, '\n')
+            print('Local Results:', list(results_w3.queue), '\n')
+            print('Server Results:', list(server_res_w3.queue), '\n')
+            if self.load == 0 and len(list(results_w3.queue)) + len(list(server_res_w3.queue)) == len(self.numbers):
+                time_taken = datetime.datetime.now() - self.t1
+                print("Time elapsed:", time_taken)
+                print("Messages Sent: ", self.msg_count)
                 sys.exit()
+            time.sleep(1)
 
 
 results_w3 = queue.Queue()
@@ -278,7 +282,7 @@ if __name__ == "__main__":
     msg_listener = threading.Thread(target=worker.msg_listener)
     result_listener = threading.Thread(target=worker.result_listener)
     load_tracker = threading.Thread(target=worker.load_tracker)
-    status_tracker = threading.Thread(target=worker.status_tracker)
+    # msg_count_tracker = threading.Thread(target=worker.msg_count_tracker)
     local = threading.Thread(target=worker.local)
     server = threading.Thread(target=worker.server)
     request_process = threading.Thread(target=worker.request_process)
@@ -291,5 +295,5 @@ if __name__ == "__main__":
     server.start()
     request_process.start()
     result_sender.start()
-    status_tracker.start()
+    # msg_count_tracker.start()
     worker.start()
